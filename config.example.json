@@ -1,0 +1,61 @@
+{
+  "_说明": "复制本文件为 config.json 后按需修改；也可全部用环境变量覆盖（见 README）",
+
+  "port": 8899,
+  "title": "慈云影视 · 系统状态",
+
+  "_targets_说明": "要监控的主站列表。name 为展示名，url 为主站根地址（不要带尾斜杠）",
+  "targets": [
+    {
+      "id": "main",
+      "name": "慈云影视 · 主站",
+      "url": "http://127.0.0.1:8811"
+    }
+  ],
+
+  "_probe_说明": "巡检频率（秒）与单次请求超时（毫秒）",
+  "probe": {
+    "intervalSec": 60,
+    "timeoutMs": 8000,
+    "historySize": 120
+  },
+
+  "_api_说明": "要巡检的主站接口及其期望（expect 可写 http 状态码或关键词）",
+  "apis": [
+    { "path": "/", "name": "首页", "expect": 200 },
+    { "path": "/api/site", "name": "站点配置", "expect": 200 },
+    { "path": "/api/home", "name": "首页数据", "expect": 200 },
+    { "path": "/api/search?q=%E7%BA%AA%E5%BD%95%E7%89%87", "name": "搜索", "expect": 200, "warnMs": 3000 },
+    { "path": "/api/multi/sources", "name": "采集源列表", "expect": 200 },
+    { "path": "/api/live/channels", "name": "直播频道", "expect": 200 },
+    { "path": "/api/live/cctv1", "name": "直播详情", "expect": 200, "warnMs": 3000 }
+  ],
+
+  "_sources_说明": "外部流媒体源健康检测：探测 m3u8 是否可访问",
+  "streams": [
+    {
+      "name": "CCTV-1",
+      "url": "https://ldncctvwbcdbyte.volcfcdn.com/ldncctvwbcd/cdrmldcctv1_1/index.m3u8?b=200-2100"
+    },
+    {
+      "name": "CCTV-2",
+      "url": "https://ldncctvwbcdbyte.volcfcdn.com/ldncctvwbcd/cdrmldcctv2_1/index.m3u8?b=200-2100"
+    },
+    {
+      "name": "CCTV-13",
+      "url": "https://ldncctvwbcdbyte.volcfcdn.com/ldncctvwbcd/cdrmldcctv13_1/index.m3u8?b=200-2100"
+    }
+  ],
+
+  "_alert_说明": "连续失败多少次判定为「故障」，以及恢复后是否提示",
+  "alert": {
+    "failThreshold": 2,
+    "recoverNotify": true
+  },
+
+  "_announce_说明": "公告：改这里的内容，主站会在下一次拉取时展示（内容变更即重新弹窗）",
+  "announcement": "",
+
+  "_auth_说明": "看板访问口令；留空则不校验（仅建议内网使用）",
+  "authToken": ""
+}

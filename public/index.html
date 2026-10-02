@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>慈云影视 · 系统状态</title>
+<style>
+  :root {
+    --bg: #0d0d12; --card: #16161f; --card2: #1c1c28;
+    --text: #eeeef5; --mute: #8b8b9c; --dim: #5f5f70;
+    --border: rgba(255,255,255,.08);
+    --up: #22c55e; --warn: #f59e0b; --down: #ef4444;
+    --brand: #e50914;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--brand); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  /* 头部 */
+  .head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 26px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .logo {
+    width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--brand), #ff6b6b); font-size: 21px;
+  }
+  .brand h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: .3px; }
+  .brand .sub { font-size: 12.5px; color: var(--mute); }
+  .head-right { display: flex; align-items: center; gap: 12px; }
+  .updated { font-size: 12.5px; color: var(--mute); }
+
+  .btn {
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 15px; border-radius: 9px; cursor: pointer; font-size: 13px; transition: .18s;
+  }
+  .btn:hover { background: #262634; border-color: rgba(255,255,255,.18); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* 总体状态横幅 */
+  .banner {
+    border-radius: 15px; padding: 22px 26px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    border: 1px solid var(--border); background: var(--card);
+    position: relative; overflow: hidden;
+  }
+  .banner::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--up); }
+  .banner.s-up::before { background: var(--up); }
+  .banner.s-degraded::before { background: var(--warn); }
+  .banner.s-down::before { background: var(--down); }
+  .banner .big { font-size: 40px; line-height: 1; }
+  .banner .txt h2 { margin: 0 0 3px; font-size: 19px; }
+  .banner .txt p { margin: 0; color: var(--mute); font-size: 13px; }
+  .banner .counts { margin-left: auto; display: flex; gap: 26px; flex-wrap: wrap; }
+  .cnt { text-align: center; }
+  .cnt b { display: block; font-size: 25px; line-height: 1.2; }
+  .cnt span { font-size: 11.5px; color: var(--mute); letter-spacing: .5px; }
+  .cnt.up b { color: var(--up); } .cnt.warn b { color: var(--warn); } .cnt.down b { color: var(--down); }
+
+  /* 卡片与栅格 */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .card h3 { margin: 0 0 15px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .tag { margin-left: auto; font-size: 11.5px; color: var(--mute); font-weight: 400; }
+
+  /* 条目行 */
+  .row {
+    display: flex; align-items: center; gap: 12px; padding: 11px 0;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .row:last-child { border-bottom: none; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--dim); }
+  .dot.up { background: var(--up); box-shadow: 0 0 9px rgba(34,197,94,.55); }
+  .dot.degraded { background: var(--warn); box-shadow: 0 0 9px rgba(245,158,11,.5); }
+  .dot.down { background: var(--down); box-shadow: 0 0 9px rgba(239,68,68,.5); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 50% { opacity: .42; } }
+  .row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .nm small { display: block; color: var(--dim); font-size: 11.5px; }
+  .row .ms { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--mute); flex: none; }
+  .row .ms.slow { color: var(--warn); }
+  .row .st { font-size: 11.5px; padding: 2px 9px; border-radius: 20px; flex: none; }
+  .st.up { background: rgba(34,197,94,.14); color: #4ade80; }
+  .st.degraded { background: rgba(245,158,11,.14); color: #fbbf24; }
+  .st.down { background: rgba(239,68,68,.14); color: #f87171; }
+
+  /* 迷你趋势 */
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 12px; }
+  .spark i { flex: 1; background: rgba(34,197,94,.42); border-radius: 2px 2px 0 0; min-height: 2px; transition: height .3s; }
+  .spark i.bad { background: rgba(239,68,68,.62); }
+  .spark i.mid { background: rgba(245,158,11,.62); }
+
+  /* 资源条 */
+  .bar { height: 7px; border-radius: 5px; background: rgba(255,255,255,.08); overflow: hidden; margin: 7px 0 3px; }
+  .bar i { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #22c55e, #4ade80); transition: width .4s; }
+  .bar i.warn { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .bar i.danger { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .kv { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--mute); }
+  .kv b { color: var(--text); font-weight: 600; }
+
+  /* 事件流 */
+  .ev { font-size: 12.5px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.05); display: flex; gap: 10px; }
+  .ev:last-child { border-bottom: none; }
+  .ev .t { color: var(--dim); flex: none; font-variant-numeric: tabular-nums; }
+  .ev.down .x { color: #f87171; } .ev.recover .x { color: #4ade80; }
+
+  .muted { color: var(--mute); font-size: 13px; }
+  .err-tip { color: var(--dim); font-size: 11.5px; }
+  .loading { text-align: center; padding: 56px; color: var(--mute); }
+  .spin {
+    width: 26px; height: 26px; border: 2.5px solid rgba(255,255,255,.14);
+    border-top-color: var(--brand); border-radius: 50%; margin: 0 auto 14px;
+    animation: sp .8s linear infinite;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  footer { text-align: center; color: var(--dim); font-size: 12px; margin-top: 36px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="brand">
+      <div class="logo">📡</div>
+      <div>
+        <h1 id="title">慈云影视 · 系统状态</h1>
+        <div class="sub" id="sub">正在加载…</div>
+      </div>
+    </div>
+    <div class="head-right">
+      <span class="updated" id="updated"></span>
+      <button class="btn" id="refresh">立即刷新</button>
+    </div>
+  </div>
+  <div id="root"><div class="loading"><div class="spin"></div>正在获取状态…</div></div>
+  <footer>慈云影视配套监控 · 数据每 <span id="iv">60</span> 秒自动更新</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let token = new URLSearchParams(location.search).get('token') || '';
+if (token) localStorage.setItem('cy_status_token', token);
+token = token || localStorage.getItem('cy_status_token') || '';
+
+function fmtSize(b) {
+  if (!b) return '0 B';
+  const u = ['B','KB','MB','GB','TB'];
+  let i = 0, n = b;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(i ? 1 : 0) + ' ' + u[i];
+}
+function fmtUptime(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return (d ? d + '天' : '') + (h ? h + '小时' : '') + m + '分钟';
+}
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return s + ' 秒前';
+  if (s < 3600) return Math.floor(s / 60) + ' 分钟前';
+  return Math.floor(s / 3600) + ' 小时前';
+}
+function hhmm(ts) {
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/status', { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+    if (r.status === 401) {
+      $('#root').innerHTML = '<div class="card"><h3>🔒 需要访问口令</h3><p class="muted">请通过 <code>?token=你的口令</code> 访问本页。</p></div>';
+      return;
+    }
+    const d = await r.json();
+    render(d);
+  } catch (e) {
+    $('#root').innerHTML = '<div class="card"><h3>⚠️ 监控服务异常</h3><p class="muted">' + e.message + '</p></div>';
+  }
+}
+
+function statusOf(key, obj, hist, field) {
+  // 以最新快照为准
+  const it = obj[key];
+  if (!it) return 'unknown';
+  if (!it.ok) return 'down';
+  if (it.slow) return 'degraded';
+  return 'up';
+}
+
+function render(d) {
+  const s = d.summary;
+  $('#title').textContent = d.title || '系统状态';
+  $('#iv').textContent = d.intervalSec || 60;
+  const map = { up: ['🟢','一切正常'], degraded: ['🟡','部分异常'], down: ['🔴','服务异常'], unknown: ['⚪','等待数据'] };
+  const [icon, label] = map[s.status] || map.unknown;
+  $('#sub').textContent = label + ' · 巡检于 ' + (s.checkedAt ? hhmm(s.checkedAt) : '—');
+  $('#updated').textContent = s.checkedAt ? timeAgo(s.checkedAt) + '更新' : '';
+
+  const L = d.latest || {};
+  const apiRows = Object.values(L.apis || {});
+  const streamRows = Object.values(L.streams || {});
+  const sys = L.sys || {};
+
+  let html = '';
+
+  /* 总览横幅 */
+  html += '<div class="banner s-' + s.status + '">' +
+    '<div class="big">' + icon + '</div>' +
+    '<div class="txt"><h2>' + (s.status === 'up' ? '所有服务运行正常' : s.status === 'degraded' ? '部分服务异常或变慢' : s.status === 'down' ? '核心服务不可用' : '正在采集数据') + '</h2>' +
+    '<p>共监控 ' + s.total + ' 项 · 最后巡检 ' + (s.checkedAt ? hhmm(s.checkedAt) : '—') + '</p></div>' +
+    '<div class="counts">' +
+      '<div class="cnt up"><b>' + s.up + '</b><span>正常</span></div>' +
+      '<div class="cnt warn"><b>' + s.degraded + '</b><span>降级</span></div>' +
+      '<div class="cnt down"><b>' + s.down + '</b><span>异常</span></div>' +
+    '</div></div>';
+
+  /* 接口 / 流源 双栏 */
+  html += '<div class="grid">';
+
+  html += '<div class="card"><h3>🔌 主站接口<span class="tag">' + apiRows.length + ' 个</span></h3>';
+  if (!apiRows.length) html += '<p class="muted">未配置接口巡检</p>';
+  apiRows.forEach((it) => {
+    const st = statusOf(it.key, L.apis, d.history, 'ms');
+    html += '<div class="row">' +
+      '<span class="dot ' + st + '"></span>' +
+      '<span class="nm">' + it.name + '<small>' + it.path + '</small></span>' +
+      '<span class="ms' + (it.slow ? ' slow' : '') + '">' + (it.ms || 0) + ' ms</span>' +
+      '<span class="st ' + st + '">' + (st === 'up' ? '正常' : st === 'degraded' ? '偏慢' : '异常') + '</span>' +
+    '</div>';
+  });
+  html += sparkline(d.history, 'apis') + '</div>';
+
+  html += '<div class="card"><h3>📺 直播源<span class="tag">' + streamRows.length + ' 个</span></h3>';
+  if (!streamRows.length) html += '<p class="muted">未配置流源探测</p>';
+  streamRows.forEach((it) => {
+    const st = it.ok ? 'up' : 'down';
+    html += '<div class="row">' +
+      '<span class="dot ' + st + '"></span>' +
+      '<span class="nm">' + it.name + '<small>' + (it.error || (it.size ? fmtSize(it.size) : '')) + '</small></span>' +
+      '<span class="ms">' + (it.ms || 0) + ' ms</span>' +
+      '<span class="st ' + st + '">' + (it.ok ? '可播放' : '不可用') + '</span>' +
+    '</div>';
+  });
+  if (streamRows.length) html += sparkline(d.history, 'streams') + '</div>';
+
+  html += '</div>';
+
+  /* 服务器资源 */
+  if (sys && sys.memTotal) {
+    const memP = sys.memPercent || 0, diskP = sys.diskPercent || 0;
+    const cls = (p) => p > 90 ? 'danger' : p > 75 ? 'warn' : '';
+    html += '<div class="card" style="margin-bottom:20px"><h3>🖥️ 监控服务器资源<span class="tag">' + (sys.host || '') + '</span></h3>' +
+      '<div style="margin-bottom:16px"><div class="kv"><span>内存使用</span><b>' + memP + '% · ' + fmtSize(sys.memUsed) + ' / ' + fmtSize(sys.memTotal) + '</b></div>' +
+      '<div class="bar"><i class="' + cls(memP) + '" style="width:' + memP + '%"></i></div></div>' +
+      (sys.diskTotal ? '<div style="margin-bottom:16px"><div class="kv"><span>磁盘使用</span><b>' + diskP + '% · 剩余 ' + fmtSize(sys.diskFree) + '</b></div>' +
+      '<div class="bar"><i class="' + cls(diskP) + '" style="width:' + diskP + '%"></i></div></div>' : '') +
+      '<div class="kv" style="margin-top:12px"><span>系统</span><b>' + (sys.platform || '') + ' · ' + sys.cpus + ' 核</b></div>' +
+      '<div class="kv"><span>负载</span><b>' + (sys.load || []).join(' / ') + '</b></div>' +
+      '<div class="kv"><span>运行时长</span><b>' + fmtUptime(sys.uptime || 0) + '</b></div>' +
+      '<div class="kv"><span>Node</span><b>' + (sys.nodeVersion || '') + '</b></div>' +
+    '</div>';
+  }
+
+  /* 事件流 */
+  if ((d.events || []).length) {
+    html += '<div class="card"><h3>🔔 最近事件<span class="tag">' + d.events.length + ' 条</span></h3>';
+    d.events.slice().reverse().forEach((e) => {
+      html += '<div class="ev ' + e.type + '"><span class="t">' + hhmm(e.ts) + '</span><span class="x">' + e.text + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  $('#root').innerHTML = html;
+}
+
+/* 迷你趋势图：展示各轮巡检的平均响应耗时（越矮越快，红=有失败） */
+function sparkline(history, which) {
+  if (!history || history.length < 2) return '';
+  const arr = history.slice(-40).map((h) => {
+    const vals = Object.values(h[which] || {});
+    if (!vals.length) return null;
+    const okAll = vals.every((v) => v.ok);
+    const avg = vals.reduce((a, v) => a + (v.ms || 0), 0) / vals.length;
+    return { avg, okAll };
+  }).filter(Boolean);
+  if (!arr.length) return '';
+  const max = Math.max(...arr.map((a) => a.avg), 1);
+  return '<div class="spark" title="近期平均响应耗时">' + arr.map((a) => {
+    const hpct = Math.max(4, Math.round((a.avg / max) * 100));
+    const cls = !a.okAll ? 'bad' : a.avg > max * 0.66 ? 'mid' : '';
+    return '<i class="' + cls + '" style="height:' + hpct + '%"></i>';
+  }).join('') + '</div>';
+}
+
+$('#refresh').onclick = async (e) => {
+  e.target.disabled = true; e.target.textContent = '刷新中…';
+  try { await fetch('/api/probe-now', { method: 'POST', headers: token ? { Authorization: 'Bearer ' + token } : {} }); } catch {}
+  await load();
+  e.target.disabled = false; e.target.textContent = '立即刷新';
+};
+
+load();
+setInterval(load, 15000); // 看板自身 15s 拉一次，服务端按 intervalSec 巡检
+</script>
+</body>
+</html>
