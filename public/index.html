@@ -115,6 +115,33 @@
     animation: sp .8s linear infinite;
   }
   @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* 即时侦测 */
+  .probe-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .probe-head h3 { margin: 0 0 4px; }
+  .probe-head .hint { color: var(--mute); font-size: 12.5px; margin: 0; }
+  .probe-box { display: flex; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap; }
+  .probe-box input {
+    flex: 1; min-width: 260px; background: var(--card2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 9px; padding: 10px 13px;
+    font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; outline: none;
+  }
+  .probe-box input:focus { border-color: rgba(229,9,20,.55); }
+  .probe-opts { display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--mute); margin-bottom: 12px; flex-wrap: wrap; }
+  .probe-opts label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .probe-opts input[type=checkbox] { accent-color: var(--brand); }
+  .preset { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+  .preset button {
+    background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--mute);
+    font-size: 11.5px; padding: 4px 10px; border-radius: 20px; cursor: pointer; transition: .16s;
+  }
+  .preset button:hover { color: var(--text); border-color: rgba(255,255,255,.2); }
+  .probe-res { margin-top: 6px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 6px; }
+  .probe-res .row .nm { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .probe-res .row .nm small { font-family: inherit; }
+  .tag-kind { font-size: 10.5px; padding: 1px 7px; border-radius: 20px; flex: none;
+    background: rgba(255,255,255,.07); color: var(--mute); }
+
   footer { text-align: center; color: var(--dim); font-size: 12px; margin-top: 36px; }
 </style>
 </head>
@@ -134,6 +161,34 @@
     </div>
   </div>
   <div id="root"><div class="loading"><div class="spin"></div>正在获取状态…</div></div>
+
+  <!-- 即时侦测面板（常驻，不随状态刷新被覆盖） -->
+  <div class="card" id="probe-card" style="margin-top:20px">
+    <div class="probe-head">
+      <div>
+        <h3>🎯 即时侦测面板 <span class="tag">指定 IP / 域名 / 流地址</span></h3>
+        <p class="hint">填入任意地址即可当场探测，支持多个（逗号 / 空格 / 换行分隔，一次最多 20 个）。检测结果不写入常规巡检记录。</p>
+      </div>
+    </div>
+    <div class="probe-box">
+      <input id="probe-input" placeholder="例如 127.0.0.1:8811  或  https://example.com/xxx.m3u8">
+      <button class="btn" id="probe-go">开始侦测</button>
+      <button class="btn" id="probe-clear">清空</button>
+    </div>
+    <div class="probe-opts">
+      <label><input type="checkbox" id="probe-head"> 仅探测连通性（HEAD 更快）</label>
+      <label>超时
+        <select id="probe-timeout" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 6px">
+          <option value="3000">3 秒</option>
+          <option value="8000" selected>8 秒</option>
+          <option value="15000">15 秒</option>
+        </select>
+      </label>
+    </div>
+    <div class="preset" id="probe-presets"></div>
+    <div class="probe-res" id="probe-res"><p class="muted">尚未侦测。可点击上方快捷目标，或直接输入地址。</p></div>
+  </div>
+
   <footer>慈云影视配套监控 · 数据每 <span id="iv">60</span> 秒自动更新</footer>
 </div>
 
@@ -299,6 +354,92 @@ $('#refresh').onclick = async (e) => {
   await load();
   e.target.disabled = false; e.target.textContent = '立即刷新';
 };
+
+/* ============================================================
+ * 即时侦测面板
+ * ============================================================ */
+const PLS = (() => { try { return JSON.parse(localStorage.getItem('cy_probe_list') || '[]'); } catch { return []; } })();
+
+function renderPresets() {
+  const box = $('#probe-presets');
+  if (!PLS.length) { box.innerHTML = ''; return; }
+  box.innerHTML = PLS.map((u, i) =>
+    '<button data-i="' + i + '" title="' + u + '">' + (u.length > 34 ? u.slice(0, 32) + '…' : u) + '</button>'
+  ).join('');
+  box.querySelectorAll('button').forEach((b) => {
+    b.onclick = () => { $('#probe-input').value = PLS[+b.dataset.i]; doProbe(); };
+  });
+}
+
+function rememberTargets(list) {
+  const set = new Set(PLS);
+  list.forEach((u) => set.add(u));
+  const arr = Array.from(set).slice(-12);   // 只留最近 12 个常用目标
+  try { localStorage.setItem('cy_probe_list', JSON.stringify(arr)); } catch {}
+  PLS.length = 0; PLS.push(...arr);
+  renderPresets();
+}
+
+function probeRow(r) {
+  const st = r.ok ? 'up' : 'down';
+  const kind = r.kind === 'stream' ? '直播流' : 'HTTP';
+  const detail = r.ok
+    ? 'HTTP ' + r.status + (r.contentType ? ' · ' + r.contentType.split(';')[0] : '') + (r.size ? ' · ' + fmtSize(r.size) : '')
+    : (r.error === 'timeout' ? '请求超时' : r.error || '不可达');
+  return '<div class="row">' +
+    '<span class="dot ' + st + '"></span>' +
+    '<span class="nm">' + esc(r.url) + '<small>' + esc(detail) + '</small></span>' +
+    '<span class="tag-kind">' + kind + '</span>' +
+    '<span class="ms">' + (r.ms || 0) + ' ms</span>' +
+    '<span class="st ' + st + '">' + (r.ok ? '可达' : '不可达') + '</span>' +
+  '</div>';
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function doProbe() {
+  const raw = ($('#probe-input').value || '').trim();
+  if (!raw) { $('#probe-input').focus(); return; }
+  const urls = raw.split(/[\s,;]+/).filter(Boolean);
+  const btn = $('#probe-go');
+  btn.disabled = true; btn.textContent = '侦测中…';
+  $('#probe-res').innerHTML = '<p class="muted">正在探测 ' + urls.length + ' 个地址…</p>';
+
+  const method = $('#probe-head').checked ? 'HEAD' : 'GET';
+  const timeout = $('#probe-timeout').value;
+
+  try {
+    const r = await fetch('/api/probe-target?method=' + method + '&timeout=' + timeout, {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+      body: JSON.stringify({ urls }),
+    });
+    if (r.status === 401) {
+      $('#probe-res').innerHTML = '<p class="muted">🔒 需要访问口令，请用 <code>?token=口令</code> 打开本页。</p>';
+      return;
+    }
+    const d = await r.json();
+    if (!d.ok) { $('#probe-res').innerHTML = '<p class="muted">探测失败：' + esc(d.error || '未知错误') + '</p>'; return; }
+    const okN = d.results.filter((x) => x.ok).length;
+    $('#probe-res').innerHTML =
+      '<div style="font-size:12.5px;color:var(--mute);padding:8px 0 2px">共 ' + d.count + ' 个 · ' +
+      '<b style="color:var(--up)">' + okN + ' 可达</b> / <b style="color:var(--down)">' + (d.count - okN) + ' 不可达</b> · ' + hhmm(d.ts) + '</div>' +
+      d.results.map(probeRow).join('');
+    rememberTargets(urls);
+  } catch (e) {
+    $('#probe-res').innerHTML = '<p class="muted">探测请求异常：' + esc(e.message) + '</p>';
+  } finally {
+    btn.disabled = false; btn.textContent = '开始侦测';
+  }
+}
+
+$('#probe-go').onclick = doProbe;
+$('#probe-clear').onclick = () => { $('#probe-input').value = ''; $('#probe-input').focus(); };
+$('#probe-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doProbe(); });
+renderPresets();
 
 load();
 setInterval(load, 15000); // 看板自身 15s 拉一次，服务端按 intervalSec 巡检

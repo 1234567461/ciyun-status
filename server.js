@@ -87,6 +87,21 @@ function authorized(req, url) {
   return bearer === cfg.authToken || q === cfg.authToken;
 }
 
+/** 读取请求体（带大小上限，防止恶意大包） */
+function readBody(req, limit = 8192) {
+  return new Promise((resolve) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { req.destroy(); resolve(''); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => resolve(''));
+  });
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -103,6 +118,17 @@ const MIME = {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   const p = url.pathname;
+
+  // ---- CORS 预检（主站从其它域调用即时侦测时会先发 OPTIONS）----
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Max-Age': '86400',
+    });
+    return res.end();
+  }
 
   // ---- 公开接口（供主站跨域读取，无需口令）----
   if (p === '/api/announcement') {
@@ -125,6 +151,41 @@ const server = http.createServer(async (req, res) => {
     try {
       await checker.runProbe();
       return json(res, 200, { ok: true, summary: checker.summary() });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /**
+   * 即时侦测指定地址（GET /api/probe-target?url=a,b,c[&method=GET|HEAD][&timeout=8000]）
+   * 也可用 POST body: { urls: [...] }
+   * 用于看板「侦测面板」按需检测任意 IP / 域名 / 流地址，不污染常规巡检曲线。
+   */
+  if (p === '/api/probe-target') {
+    if (!authorized(req, url)) return json(res, 401, { error: 'unauthorized' });
+
+    let urls = [];
+    const q = url.searchParams.get('url') || url.searchParams.get('urls') || '';
+    if (q) urls = q.split(/[\s,;]+/);
+
+    if (!urls.length && req.method === 'POST') {
+      const body = await readBody(req, 8192);
+      try {
+        const j = JSON.parse(body || '{}');
+        if (Array.isArray(j.urls)) urls = j.urls;
+        else if (j.url) urls = String(j.url).split(/[\s,;]+/);
+      } catch { /* 忽略非法 body */ }
+    }
+
+    urls = urls.map((s) => String(s).trim()).filter(Boolean);
+    if (!urls.length) return json(res, 400, { ok: false, error: '缺少 url 参数' });
+    if (urls.length > 20) return json(res, 400, { ok: false, error: '单次最多 20 个地址' });
+
+    try {
+      const timeout = Math.min(Math.max(parseInt(url.searchParams.get('timeout'), 10) || cfg.probe.timeoutMs, 1000), 20000);
+      const method = (url.searchParams.get('method') || 'GET').toUpperCase();
+      const results = await checker.probeUrls(urls, { timeout, method });
+      return json(res, 200, { ok: true, count: results.length, results, ts: Date.now() });
     } catch (e) {
       return json(res, 500, { ok: false, error: e.message });
     }
